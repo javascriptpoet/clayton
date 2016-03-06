@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module type="WEB_MODULE" version="4">
+  <component name="NewModuleRootManager" inherit-compiler-output="true">
+    <exclude-output />
+    <content url="file://$MODULE_DIR$">
+      <sourceFolder url="file://$MODULE_DIR$/packages" isTestSource="false" />
+      <excludeFolder url="file://$MODULE_DIR$/.meteor/local" />
+    </content>
+    <content url="file://$USER_HOME$/meteor/local_packages">
+      <excludeFolder url="file://$USER_HOME$/meteor/local_packages/iron-router/examples/basic/.meteor/local" />
+      <excludeFolder url="file://$USER_HOME$/meteor/local_packages/iron-router/examples/data_contexts/.meteor/local" />
+      <excludeFolder url="file://$USER_HOME$/meteor/local_packages/iron-router/examples/data_not_found_plugin/.meteor/local" />
+      <excludeFolder url="file://$USER_HOME$/meteor/local_packages/iron-router/examples/dynamic_layouts/.meteor/local" />
+      <excludeFolder url="file://$USER_HOME$/meteor/local_packages/iron-router/examples/link_helpers/.meteor/local" />
+      <excludeFolder url="file://$USER_HOME$/meteor/local_packages/iron-router/examples/loading_plugin/.meteor/local" />
+      <excludeFolder url="file://$USER_HOME$/meteor/local_packages/iron-router/examples/middleware/.meteor/local" />
+      <excludeFolder url="file://$USER_HOME$/meteor/local_packages/iron-router/examples/reactive_state/.meteor/local" />
+      <excludeFolder url="file://$USER_HOME$/meteor/local_packages/iron-router/examples/render_helper/.meteor/local" />
+      <excludeFolder url="file://$USER_HOME$/meteor/local_packages/iron-router/examples/route_controllers/.meteor/local" />
+      <excludeFolder url="file://$USER_HOME$/meteor/local_packages/iron-router/examples/waiton/.meteor/local" />
+    </content>
+    <orderEntry type="sourceFolder" forTests="false" />
+  </component>
+</module>
