@@ -1,26 +1,28 @@
 /**
  * Created by dmitry on 2/28/16.
  */
-    debugger;
-var s='';
-Sample=new Mongo.Collection('sample');
-Sample.insert({title:'whatzup'});
+    //debugger;
 if(Meteor.isServer) {
-    // debugger
+    //for each relationship where the other side is heavy, subscribe to the items referencing this doc
+    //that is if the doc._id is available. it will not be for insert type of forms. still, will be able to reference
+    //items for relationships where this side is heavy
+    // always need to subscribe to all the records on the other side. only the specified fields
+    Meteor.publish('jspAfRel-otherSide', function (myColName, relName) {
+        var sides = jspAfRelations.getRightSide(myColName, relName),
+            fieldsData=sides.otherSide.tableSettings.fields,
+            fields= _.reduce(fieldsData,function(memo,field){
+                memo[field.key]=1;
+                return memo;
+            },{});
+        return sides.otherSide.collection.find({},{fields:fields});
+    });
     Meteor.publish('jspAfRel-otherHeavySide', function (myDocId, myColName, relName) {
         var sides = jspAfRelations.getRightSide(myColName, relName),
-            heavySide = sides.mySide.side === 'heavy' ? sides.mySide : sides.otherSide,
-            key = (heavySide.key || 'relations') + '.' + relName,
-            sel1 = {}, sel2 = {};
-        sel2[key] = {$in: [myDocId]};
-        sel1[key] = {exists: true};
-        var sel = {$and: [sel1, sel2]};
-        return heavySide.collection.find(sel, {fields: {_id:1}});
+            sel= {};
+            sel[rel.heavyKey] = {$in: [myDocId]};
+        return sides.otherSide.collection.find(sel, {fields: {_id: 1}});
     });
-}
-
-//collection used to store data for server to client reactivity
-OtherHeavySide=new Mongo.Collection('jspAfRel-otherHeavySide');
+};
 
 jspAfRelations={
     _rels:{},
@@ -77,46 +79,17 @@ jspAfRelations={
      */
     addRel:function(name,options){
         function getSide(side,howHeavy) {
-            var table = side.table || {};
-            columns = _.union(table.columns || [], [
-                {data: '_id', title: 'ID'}
-            ]);
-            s=s+'1';
+            if(!side.collection)
+                Meteor.Error('afRelations Error','each side of a relationship must have collection object');
             return {
-                table:new Tabular.Table({
-                    name: s,
-                    collection: Sample,
-                    columns: [
-                        {data: "title", title: "Title"}
-                    ]
-                }),
-               /* table: new Tabular.Table(_.extend({
-                    name: 'jsp-' + name + '-' + howHeavy,
-                    collection:side.collection,
-                    columns: _.map(table.columns, function (column) {
-                        if (column.template) {
-                            var createdCell = function (node, cellData, rowData) {
-                                $(node).html = '';
-                                return Blaze.renderWithData(Template[column.template], {
-                                    value: cellData,
-                                    doc: rowData
-                                }, node)
-                            }
-
-                        };
-                        return _.extend(_.omit(column, 'template'), {
-                            createdCell: createdCell,
-                        });
-                    })
-                }, _.omit(table,['name','collection','columns']))),*/
                 collection:side.collection,
                 colName: side.collection._name,
                 icon:side.icon,
                 label:side.label || side.collection._name,
-                side:howHeavy
+                side:howHeavy,
+                tableSettings: _.omit(side,['collection','icon','label'])
             }
         }
-        options = _.clone(options);
         this._rels[name] = {
             relName: name,
             lightSide: getSide(options.lightSide, 'light'),

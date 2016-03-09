@@ -1,36 +1,21 @@
 /**
  * Created by dmitry on 2/27/16.
  */
-//some helpers
-function getSelector(rel,myDocId){
-    var key=(rel.otherSide.key || 'relations')+'.'+rel.relName,
-        sel1={},sel2={};
-    sel2[key]={$in:[myDocId]};
-    sel1[key]={exists:true};
-    return {$and:[sel1,sel2]};
-};
 Meteor.startup(function() {
     Template.afInputRelations.onCreated(function () {
         var self=this,
             data = self.data,
             formData = data.formData,
-            myColName=AutoForm.getFormCollection()._name,
-            myDocId=data.docId;
-        //for each relationship where the other side is heavy, subscribe to the items referencing this doc
-        //that is if the doc._id is available. it will not be for insert type of forms. still, will be able to reference
-        //items for relationships where this side is heavy
-        _.each(data.rels,function(rel){
-            if (rel.otherSide.side==='heavy' && myDocId)
-                self.subscribe('jspAfRel-otherHeavySide', myDocId,myColName,rel.relName);
-        });
+            myColName=AutoForm.getFormCollection()._name;
+            //do all the subscriptions related to the other side of  relationship
+            self.subscribe('jspAfRel-otherSide',myColName,data.rel.relName);
+            if(data.rel.otherSide.side==='heavy')
+                self.subscribe('jspAfRel-otherHeavySide', data.myDocId,myColName,data.rel.relName);
     });
 
     Template.afInputRelations.helpers({
-        getTable:function(){
-            return this.otherSide.table
-        },
-        getSampleTable:function(){
-            return myApp.sampleTable;
+        jsonValue:function(){
+            return this.value.get();
         },
         getAttr: function () {
             return _.omit(this.atts, 'data-schema-key')
@@ -41,39 +26,35 @@ Meteor.startup(function() {
         getValue: function () {
             return this.value.get()
         },
-        getRel: function () {
-            //returns name/label of one of relationships monitored by this field (passed as data arg to the template)
-            return this.curRel.get();
-        },
         getSelItemCount: function () {  //returns number of items referenced on the other side of a relationship
-            var rel = this,
-                data=Template.instance().data;
+            var rel=this.rel;
             if (rel.mySide.side === 'heavy') {
                 //references are imbeded on this side in this field
-                var valRel = (data.value.get() || {})[rel.relName];
-                return valRel ? valRel.items.count : 0;
+                return this.value.get().count
             } else {  //references imbeded on the other side.
-                return rel.otherSide.collection.find(getSelector(rel,data.docId)).count()
+                var sel={};
+                sel[rel.heavykey]={$in:[this.docId]};
+                return rel.otherSide.collection.find(sel).count()
             }
         },
-        getTableSelector: function (kw/*type*/) {
+        getCursor: function (kw/*type*/) {
             var type=kw.hash.type,
-                rel=this,
-                data=Template.instance().data,
-                value = data.value.get() || {},
-                relValue = value[rel.relName] || {items:[{_id:0}]};
+                rel=this.rel,
+                value = this.value.get();
             if (rel.mySide.side === 'heavy') {
                 if (type === 'selItems') {
-                    return {_id: {$in: _.pluck(relValue.items, '_id')}}
+                    return rel.otherSide.collection.find({_id: {$in: value}})
                 } else {
-                    return {_id: {$nin: _.pluck(relValue.items, '_id')}}
+                    return rel.otherSide.collection.find({_id: {$nin: value}})
                 }
             } else {
-                var ids= rel.otherSide.collection.find(getSelector(rel,data.docId)).fetch();
+                var sel={};
+                sel[rel.heavyKey]={$in:[this.docId]};
+                var ids= rel.otherSide.collection.find(sel).fetch();
                 if (type === 'selItems') {
-                    return {_id: {$in:ids}}
+                    return rel.otherSide.collection.find({_id: {$in:ids}})
                 } else {
-                    return {_id: {$nin: ids}}
+                    return rel.otherSide.collection.find({_id: {$nin: ids}})
                 }
             }
         }
@@ -81,11 +62,9 @@ Meteor.startup(function() {
 
     Template.afInputRelations.events({
         'click #avail-sel': function (e, t) {
-            t.data.curRel.set(Blaze.getData(e.target));
             $('#chev-avail').click();
         },
         'click #sel-sel': function (e, t) {
-            t.data.curRel.set(Blaze.getData(e.target));
             $('#chev-sel').click();
         },
         'click #chev-sel,#chev-avail': function (e, t) {
@@ -96,55 +75,47 @@ Meteor.startup(function() {
                 $(el).removeClass('glyphicon-chevron-up').addClass('glyphicon-chevron-down');
             }
         },
-        'click tbody > tr': function (e, t) {
-            var tableEl = $(e.target).closest('table'),
-                dataTable = tableEl.DataTable(),
-                rowData = dataTable.row(e.currentTarget).data();
-            if (!rowData) return; // Won't be data if a placeholder row is clicked
-            var rel = t.data.curRel.get(),
-                oldVal = value('get'),
-                relVal = oldVal[rel.relName];
+        'click .reactive-table tbody tr': function (e, t) {
+            var rel = t.data.rel,
+                oldVal = value('get') || [],
+                self=this,
+                tableEl = $(e.target).closest('reactive-table');
 
             function value(action, val) {
                 if (action === 'get') {
                     return (rel.mySide.side === 'heavy') ?
                         t.data.value.get() :
-                        rel.otherSide.collection.find({_id: rowData._id}).fetch()[0][rel.otherSide.key]
+                        rel.otherSide.collection.findOne({_id: self._id}).fetch()[rel.heavyKey]
                 } else {
                     if (rel.mySide.side === 'heavy') {
                         t.data.value.set(val)
                     } else {
                         var modifier = {};
-                        modifier[rel.otherSide.key] = val;
-                        rel.otherSide.collection.update({_id: rowData._id}, modifier)
+                        modifier[rel.heavyKey] = val;
+                        rel.otherSide.collection.update({_id: self._id}, modifier)
                     }
                 }
             }
 
-            var id = (rel.mySide.side === 'heavy') ? rowData._id : t.data.docId;
+            var id = (rel.mySide.side === 'heavy') ? self._id : t.data.docId;
             if ($(tableEl).attr('id') === 'sel-items-table') {
                 //if clicked row in selected items table, then, remove from selected
-                relVal.items = _.reject(relVal.items, function (item) {
-                    return item._id === id
+                oldVal = _.reject(oldVal, function (oldId) {
+                    return oldId === id
                 })
             } else {
-                var newItem = {
+                /*var newItem = {
                     _id: id,
                     userId: Meteor.userId(),
                     time: Date.now()
-                };
-                if (relVal) {
-                    relVal.items.push(newItem)
-                } else {
-                    oldVal = {};
-                    oldVal[rel.relName] = [newItem];
-                }
+                };*/
+                oldVal.items.push(id)
             }
-            value('set', oldValue);
+            value('set', oldVal);
         }
     });
 
-//now we can register the fields and relax
+//now we can register the field and relax
     AutoForm.addInputType('relations', {
         template: 'afInputRelations',
         valueOut: function () {
@@ -152,16 +123,15 @@ Meteor.startup(function() {
         },
         contextAdjust: function (context) {
             //digest relationships names into data relevant to whatever side of relationship the form's collection is
-            context.rels = _.map(context.relNames, function (relName) {
-                return _.defaults(
-                    {relName: relName},
-                    jspAfRelations.getRightSide(AutoForm.getFormCollection(), relName)
-                )
-            });
+            var relName= context.atts.relName || context.atts['data-schema-key'];
+            context.rel =_.defaults(
+                {relName:relName},
+                jspAfRelations.getRightSide(AutoForm.getFormCollection(), relName)
+            );
+            context.heavyKey=jspAfRelations.getRel(relName).heavySide.key || relName;
             context.formData = AutoForm.getCurrentDataForForm();
             context.docId=context.formData.doc?context.formData.doc._id:0;
-            context.value = new ReactiveVar(context.value);
-            context.curRel = new ReactiveVar(context.rels[0]);
+            context.value = new ReactiveVar(context.value || []);
             return context;
         }
     });

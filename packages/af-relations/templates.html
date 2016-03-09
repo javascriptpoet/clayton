@@ -19,69 +19,63 @@
 <template name="afInputRelations">
 
     <!-- this is a hidden input element where autoforms will place field value -->
-    <input type="hidden" value="{{value}}" data-schema-key={{getSchemaKey}}>
+    <select type="hidden" value={{getValue}} {{atts}} multiple></select>
     <div class='container' {{getAttr}}>
         <div class="row">
             <div id="top-row" class='col-md-12'>
-                {{#each rels}}
-                    <div class='btn-group' >
-                        <button type='button' class='btn btn-primary'>
-                            {{#if otherSide.icon}}<span>{{otherSide.icon}}</span>{{/if}}
-                            {{otherSide.label}}
-                        </button>
-                        <button type="button" id="sel-sel" class='btn btn-primary clickable' data-toggle='collapse' data-target='#sel-items'>
-                            <span class='badge'>{{getSelItemCount}}</span>
-                        </button>
-                        <button type="button" id="avail-sel" class='btn btn-primary clickable' data-toggle='collapse' data-target='#avail-items'>
-                            <i id="chev-sel" class="fa fa-plus-square-o"></i>
-                        </button>
-                    </div>
-                {{/each}}
+                <div class='btn-group' >
+                    <button type='button' class='btn btn-primary'>
+                        {{#if otherSide.icon}}<span>{{otherSide.icon}}</span>{{/if}}
+                        {{otherSide.label}}
+                    </button>
+                    <button type="button" id="sel-sel" class='btn btn-primary clickable' data-toggle='collapse' data-target='#sel-items'>
+                        <span class='badge'>{{getSelItemCount}}</span>
+                    </button>
+                    <button type="button" id="avail-sel" class='btn btn-primary clickable' data-toggle='collapse' data-target='#avail-items'>
+                        <i id="chev-sel" class="fa fa-plus-square-o"></i>
+                    </button>
+                </div>
             </div>
         </div>
-        {{#with getRel}}
-            <div class="row">
-                <div class="col-md-12">
-                    <div class="panel panel-default">
-                        <div class="panel-heading">
-                            <h2 class="panel-title">{{otherSide.label}}: selected items</h2>
-                            <div class='pull-right'>
-                                <span class='badge'>{{getSelItemCount}}</span>
-                                <span class="clickable" data-toggle='collapse' data-target="#sel-items">
-                                    <i id='chev-sel' class="chev-toggle glyphicon glyphicon-chevron-down"></i>
-                                </span >
-                            </div>
-                        </div>
-                        <div id='sel-items' class="panel-body collapse">
-                            {{> tabular
-                                table=otherSide.table
-                                selector=(getTableSelector type='selItems')
-                                id='sel-items-table'
-                                class="table table-striped table-bordered table-condensed"
-                            }}
+        <div class="row">
+            <div class="col-md-12">
+                <div class="panel panel-default">
+                    <div class="panel-heading">
+                        <h2 class="panel-title">{{otherSide.label}}: selected items</h2>
+                        <div class='pull-right'>
+                            <span class='badge'>{{getSelItemCount}}</span>
+                            <span class="clickable" data-toggle='collapse' data-target="#sel-items">
+                                <i id='chev-sel' class="chev-toggle glyphicon glyphicon-chevron-down"></i>
+                            </span >
                         </div>
                     </div>
-                    <div class="panel panel-default">
-                        <div class="panel-heading">
-                            <h2 class="panel-title">{{otherSide.label}}: available items</h2>
-                            <div class='pull-right'>
-                                <span class='badge'>{{getAvailItemCount}}</span>
-                              <span class="clickable" data-toggle='collapse' data-target="#avail-items">
-                                    <i id="chev-avail"  class="chev-toggle glyphicon glyphicon-chevron-down"></i>
-                                </span>
-                            </div>
+                    <div id='sel-items' class="panel-body collapse">
+                        {{> reactiveTable
+                            collection=(getCursor type='selItems')
+                            id='sel-items-table'
+                            settings=otherSide.tableSettings
+                        }}
+                    </div>
+                </div>
+                <div class="panel panel-default">
+                    <div class="panel-heading">
+                        <h2 class="panel-title">{{otherSide.label}}: available items</h2>
+                        <div class='pull-right'>
+                            <span class='badge'>{{getAvailItemCount}}</span>
+                            <span class="clickable" data-toggle='collapse' data-target="#avail-items">
+                                <i id="chev-avail"  class="chev-toggle glyphicon glyphicon-chevron-down"></i>
+                            </span>
                         </div>
-                        <div id='avail-items' class="panel-body collapse">
-                            {{> tabular
-                                table=getTable
-                                selector=(getTableSelector type='availItems')
-                                id='avail-items-table'
-                                class="table table-striped table-bordered table-condensed"
-                            }}
-                        </div>
+                    </div>
+                    <div id='avail-items' class="panel-body collapse">
+                        {{> reactiveTable
+                            collection=(getCursor type='availItems')
+                            id='avail-items-table'
+                            settings=otherSide.tableSettings
+                        }}
                     </div>
                 </div>
             </div>
-        {{/with}}
+        </div>
     </div>
 </template>

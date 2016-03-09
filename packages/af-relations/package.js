@@ -20,7 +20,8 @@ Package.onUse(function(api) {
     'underscore',
     'aldeed:autoform',
     'fortawesome:fontawesome',
-    'aldeed:tabular',
+    //'aldeed:tabular',
+    'aslagle:reactive-table',
     'reactive-var',
       'mongo'
   ],both);
