@@ -16,6 +16,7 @@ var both=['client','server'],
 Package.onUse(function(api) {
   api.versionsFrom('1.2.1');
   api.use([
+      'mongo',
     'ecmascript',
     'underscore',
     'aldeed:autoform',
@@ -23,7 +24,8 @@ Package.onUse(function(api) {
     //'aldeed:tabular',
     'aslagle:reactive-table',
     'reactive-var',
-      'mongo'
+    'reywood:publish-composite',
+    'dburles:mongo-collection-instances'
   ],both);
   api.use(['session','jquery','templating'],client);
   api.addFiles(['both.js'],both);

@@ -19,6 +19,7 @@ ecmascript              # Enable ECMAScript2015+ syntax in app code
 
 autopublish             # Publish all data to the clients (for prototyping)
 insecure                # Allow all DB writes from clients (for prototyping)
+dburles:mongo-collection-instances
 twbs:bootstrap
 iron:router
 alanning:roles@1.2.13
@@ -35,8 +36,10 @@ cfs:gridfs
 yogiben:autoform-file
 rikonor:autoform-image-gallery
 meteorhacks:npm
-npm-container
 jspoet:af-relations
 jspoet:admin
 utils
 aldeed:tabular
+
+
+npm-container

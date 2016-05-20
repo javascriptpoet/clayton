@@ -20,5 +20,6 @@
       <excludeFolder url="file://$USER_HOME$/meteor/local_packages/iron-router/examples/waiton/.meteor/local" />
     </content>
     <orderEntry type="sourceFolder" forTests="false" />
+    <orderEntry type="library" name="Node.js v0.10.25 Core Modules" level="application" />
   </component>
 </module>

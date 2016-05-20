@@ -1,137 +1,130 @@
 /**
  * Created by dmitry on 2/27/16.
  */
+
+
 Meteor.startup(function() {
-    Template.afInputRelations.onCreated(function () {
-        var self=this,
-            data = self.data,
-            formData = data.formData,
-            myColName=AutoForm.getFormCollection()._name;
-            //do all the subscriptions related to the other side of  relationship
-            self.subscribe('jspAfRel-otherSide',myColName,data.rel.relName);
-            if(data.rel.otherSide.side==='heavy')
-                self.subscribe('jspAfRel-otherHeavySide', data.myDocId,myColName,data.rel.relName);
-    });
-
-    Template.afInputRelations.helpers({
-        jsonValue:function(){
-            return this.value.get();
+    Template['jspAfRel'].helpers({
+        getTopTemplate:function(){
+            return this.atts.topTemplate || 'jspReltoptemplate'
         },
-        getAttr: function () {
-            return _.omit(this.atts, 'data-schema-key')
+        getValue:function(){
+            return JSON.stringify(this.value.get())
         },
-        schemaKey: function () {
+        getSchemaKey:function(){
             return this.atts['data-schema-key']
-        },
-        getValue: function () {
-            return this.value.get()
-        },
-        getSelItemCount: function () {  //returns number of items referenced on the other side of a relationship
-            var rel=this.rel;
-            if (rel.mySide.side === 'heavy') {
-                //references are imbeded on this side in this field
-                return this.value.get().count
-            } else {  //references imbeded on the other side.
-                var sel={};
-                sel[rel.heavykey]={$in:[this.docId]};
-                return rel.otherSide.collection.find(sel).count()
-            }
-        },
-        getCursor: function (kw/*type*/) {
-            var type=kw.hash.type,
-                rel=this.rel,
-                value = this.value.get();
-            if (rel.mySide.side === 'heavy') {
-                if (type === 'selItems') {
-                    return rel.otherSide.collection.find({_id: {$in: value}})
-                } else {
-                    return rel.otherSide.collection.find({_id: {$nin: value}})
-                }
-            } else {
-                var sel={};
-                sel[rel.heavyKey]={$in:[this.docId]};
-                var ids= rel.otherSide.collection.find(sel).fetch();
-                if (type === 'selItems') {
-                    return rel.otherSide.collection.find({_id: {$in:ids}})
-                } else {
-                    return rel.otherSide.collection.find({_id: {$nin: ids}})
-                }
-            }
         }
     });
 
-    Template.afInputRelations.events({
-        'click #avail-sel': function (e, t) {
-            $('#chev-avail').click();
+    Template['jspReltoptemplate'].helpers({
+        getPanelTemplate:function(rel){
+            return rel.relTemplateName || 'jspRel'+rel.displayMode;
         },
-        'click #sel-sel': function (e, t) {
-            $('#chev-sel').click();
+        getRelLabel:function(rel){
+            return rel.label || rel.colName
         },
-        'click #chev-sel,#chev-avail': function (e, t) {
-            var el= e.target;
-            if ($(el).hasClass('glyphicon-chevron-down')) {
-                $(el).removeClass('glyphicon-chevron-down').addClass('glyphicon-chevron-up');
-            } else if ($(el).hasClass('glyphicon-chevron-up')) {
-                $(el).removeClass('glyphicon-chevron-up').addClass('glyphicon-chevron-down');
-            }
-        },
-        'click .reactive-table tbody tr': function (e, t) {
-            var rel = t.data.rel,
-                oldVal = value('get') || [],
-                self=this,
-                tableEl = $(e.target).closest('reactive-table');
-
-            function value(action, val) {
-                if (action === 'get') {
-                    return (rel.mySide.side === 'heavy') ?
-                        t.data.value.get() :
-                        rel.otherSide.collection.findOne({_id: self._id}).fetch()[rel.heavyKey]
-                } else {
-                    if (rel.mySide.side === 'heavy') {
-                        t.data.value.set(val)
-                    } else {
-                        var modifier = {};
-                        modifier[rel.heavyKey] = val;
-                        rel.otherSide.collection.update({_id: self._id}, modifier)
-                    }
-                }
-            }
-
-            var id = (rel.mySide.side === 'heavy') ? self._id : t.data.docId;
-            if ($(tableEl).attr('id') === 'sel-items-table') {
-                //if clicked row in selected items table, then, remove from selected
-                oldVal = _.reject(oldVal, function (oldId) {
-                    return oldId === id
-                })
-            } else {
-                /*var newItem = {
-                    _id: id,
-                    userId: Meteor.userId(),
-                    time: Date.now()
-                };*/
-                oldVal.items.push(id)
-            }
-            value('set', oldVal);
+        getSelItemCount:function(rel){
+            return jspAfRelations.relsCollection.find(getRelColSel({
+                myColName: AutoForm.getFormCollection()._name,
+                otherColName: rel.colName,
+                myDocId:this.docId,
+            })).count()
         }
     });
+
+    _.each(['jspReltabletable'/*,'jspRel-btn-table','jspRel-btn-btn'*/],function(tmplName){
+        Template[tmplName].onCreated(function panelCreate(){
+            //do the subscription, either default or the supplied in rel options
+            // for the default subscription, each subscribes to all relevant records in
+            //relationship collection and the specified fields of the entire collection on the other side of the relationship
+            //if docid is not defined, its insert form. the af field will not display, so dont bother subscribing
+            if(!AutoForm.getCurrentDataForForm().doc._id) return;
+            var rel=this.data,
+                myColName=AutoForm.getFormCollection()._name;
+            var fields={},
+                btnField={},
+                cols=rel.table.fields;
+            //we need to extend the columns with _id but keep it hidden as default
+            if(!_.findWhere(cols,{key:'_id'})){
+                cols.push({key:'_id',label:'doc id',hidden:true})
+            }
+            if((rel.displayMode==='btn-btn') || (rel.displayMode==='btntable')){
+                fields[rel.btnField || 'title']=1;
+            };
+            if((rel.displayMode==='tabletable') || (rel.displayMode==='btntable')){
+                fields=_.extend(
+                    fields,
+                    _.reduce(
+                        (rel.table || {columns:[{key:'title'}]}).columns,
+                        function(memo,col){
+                            memo[col.key]=1;
+                            return memo;
+                        },{})
+                )
+            }
+            Template.instance().subscribe('jspAfRel', {
+                myColName: myColName,
+                otherColName: rel.colName,
+                myDocId:rel.docId,
+                fields:fields
+            });
+        });
+        Template[tmplName].helpers({
+            getTableCursor:function(arg){
+                //first, we'll get all the related doc ids from the relations collection
+                return jspAfRelations.getRelatedDocs({
+                    myColName: AutoForm.getFormCollection()._name,
+                    otherColName: this.colName,
+                    myDocId:AutoForm.getCurrentDataForForm().doc._id,
+                    relSel:this.relSel,
+                    otherSel:this.relatedDocSel
+                })[arg.hash.type==='selItems'?'in':'nin']
+            },
+            getRelLabel:function(){
+                return this.label || this.colName
+            },
+        });
+        Template[tmplName].events({
+            'click .reactive-table tbody tr': function (e, t) {
+                var rel = t.data,
+                    myDocId= AutoForm.getCurrentDataForForm().doc._id,
+                    myColName=AutoForm.getFormCollection()._name,
+                    doc=this,
+                    el = $(e.target).closest('.reactive-table');
+
+                var clickedId=$(el).attr('id'),
+                    clickedClass=$(el).attr('id'),
+                    opts={
+                        fromDocId:myDocId,
+                        fromColName:myColName,
+                        toDocId:doc._id,
+                        toRelName:rel.name
+                    };
+
+                if ($(el).attr('id') === 'sel-items-table') {
+                    //if clicked row in selected items table, then, remove relationship
+                    Meteor.call('jspRelRemove',opts)
+                } else {
+                    Meteor.call('jspRelInsert',opts)
+                }
+            }
+        });
+    })
 
 //now we can register the field and relax
-    AutoForm.addInputType('relations', {
-        template: 'afInputRelations',
+    AutoForm.addInputType('jspAfRelations', {
+        template: 'jspAfRel',
         valueOut: function () {
             return this.val();
         },
         contextAdjust: function (context) {
-            //digest relationships names into data relevant to whatever side of relationship the form's collection is
-            var relName= context.atts.relName || context.atts['data-schema-key'];
-            context.rel =_.defaults(
-                {relName:relName},
-                jspAfRelations.getRightSide(AutoForm.getFormCollection(), relName)
-            );
-            context.heavyKey=jspAfRelations.getRel(relName).heavySide.key || relName;
-            context.formData = AutoForm.getCurrentDataForForm();
-            context.docId=context.formData.doc?context.formData.doc._id:0;
+            context.docId=AutoForm.getCurrentDataForForm().doc?
+                AutoForm.getCurrentDataForForm().doc._id:
+                0;
             context.value = new ReactiveVar(context.value || []);
+            context.rels= _.map(context.atts.rels,function(relName){
+               return jspAfRelations.getRel(relName)
+            });
             return context;
         }
     });

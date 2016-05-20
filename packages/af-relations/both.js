@@ -2,101 +2,146 @@
  * Created by dmitry on 2/28/16.
  */
     //debugger;
-if(Meteor.isServer) {
-    //for each relationship where the other side is heavy, subscribe to the items referencing this doc
-    //that is if the doc._id is available. it will not be for insert type of forms. still, will be able to reference
-    //items for relationships where this side is heavy
-    // always need to subscribe to all the records on the other side. only the specified fields
-    Meteor.publish('jspAfRel-otherSide', function (myColName, relName) {
-        var sides = jspAfRelations.getRightSide(myColName, relName),
-            fieldsData=sides.otherSide.tableSettings.fields,
-            fields= _.reduce(fieldsData,function(memo,field){
-                memo[field.key]=1;
-                return memo;
-            },{});
-        return sides.otherSide.collection.find({},{fields:fields});
-    });
-    Meteor.publish('jspAfRel-otherHeavySide', function (myDocId, myColName, relName) {
-        var sides = jspAfRelations.getRightSide(myColName, relName),
-            sel= {};
-            sel[rel.heavyKey] = {$in: [myDocId]};
-        return sides.otherSide.collection.find(sel, {fields: {_id: 1}});
-    });
+getRelColSel=function (opts) {
+    return {
+        $or: [
+            {
+                $and: [
+                    {'sides.0.docId': opts.myDocId, 'sides.0.colName': opts.myColName},
+                    {'sides.1.colName': opts.otherColName}
+                ]
+            },
+            {
+                $and: [
+                    {'sides.1.docId': opts.myDocId, 'sides.1.colName': opts.myColName},
+                    {'sides.0.colName': opts.otherColName}
+                ]
+            }
+        ]
+    }
+};
+function getInsSel(sides){
+    return {
+        $or: [
+            {
+                'sides.0':sides[0],
+                'sides.1':sides[1]
+            },
+            {
+                'sides.1':sides[0],
+                'sides.0':sides[1]
+            }
+        ]
+    }
 };
 
-jspAfRelations={
+jspAfRelations= {
     _rels:{},
-    /**
-     * @Method getRightSide
-     * given a collection, returns an object with sides renamed 'mySide' and 'otherSide'
-     * @param col
-     * @param relName
-     */
-    getRightSide:function(col,relName){
-        var rel=this.getRel(relName);
-        if(!rel){
-            throw(new Meteor.Error('RelError','relationship '+relName+' is not defined'))
-        }
-        colName=((typeof col) === 'string')?col:col._name;
-        if(rel.heavySide.collection._name===colName){
-            return {mySide:rel.heavySide,otherSide:rel.lightSide}
-        }else if(rel.lightSide.collection._name===colName){
-            return {mySide:rel.lightSide,otherSide:rel.heavySide}
-        }else{
-            throw(new Meteor.Error('RelError','collection '+colName+' is not part of relationship '+relName))
-        }
-    },
-
-    /**
-     * @Method addRel(name<string>,options<object>)
-     *  registers a relationship between two enteties. This step allows prebuilding of the tables and suscriptions
-     *  and improves performance. Only 'collection' type is supported now. relates one collection
-     *  to another. one side (heavy side) must be chosen  to imbed keys indexed to docs on the other side (light side).
-     *  The indexes are stored in the afFieldRelations fieldr of the heavy side. The corresponding field on the light
-     *  side is just a placeholder to display the field on the form. However, a number of relationships can be combined under
-     *  the same field and a collection can be the heavy side for ne relationship and the light side for another
-     *
-     * @param name required*  the unique name of the relationship. it is used to select it in a schema
-     *
-     * @param options required
-     *  any additional properties of a relationship. Some required and some are optional
-     *      heavySide:{
-     *          collection:<mongo collection obj>  required
-     *          key:<string> optional name of the jspAfRelations field. If not supplied, defaults to 'relations'
-     *          label:<string> optional collection name is used if not provided
-     *          table:<Object> {table of the heavySide} optional
-     *              parameters of the table displayed in the form. If omited, defaults to just 'ID' field in the table
-     *             This are the same parameters as defined in aldeed:meteor-tabular. do not
-     *              include table name. It is generated automatically as jsp{rel.name}-{rel.lightSide.collection}
-     *      }
-     *      heavySide: ... mirrow image of light side
-     *      icon: <string> optional
-     *          font awesome icon class. This is the icon that will be displayed for this collection for this relationship.
-     *
-     *
-     *
-     *
-     */
-    addRel:function(name,options){
-        function getSide(side,howHeavy) {
-            if(!side.collection)
-                Meteor.Error('afRelations Error','each side of a relationship must have collection object');
-            return {
-                collection:side.collection,
-                colName: side.collection._name,
-                icon:side.icon,
-                label:side.label || side.collection._name,
-                side:howHeavy,
-                tableSettings: _.omit(side,['collection','icon','label'])
-            }
-        }
-        this._rels[name] = {
-            relName: name,
-            lightSide: getSide(options.lightSide, 'light'),
-            heavySide: getSide(options.heavySide, 'heavy')
-        };
-    },
     getRel:function(name){
-            return this._rels[name]
+        return this._rels[name]
+    },
+    addRel:function(name,rel){
+        /*
+        rel{[object]}
+            colName {string} - name of the related collection
+            label{string} optional - short label to display in the tab, colName if not supplied. html
+            title {string} optional - description to display in the panel. html
+            displayMode{string} optional - a switch to specify how widget will be displayed.
+                'table-table'
+                'btn-table'
+                'btn-btn'
+            table {object} optional - if table is specified by display option, defines table settings per tabular:meteor-tabular,
+                if columns not supplied, all the fields except _id will be displayed
+            btnField{string} optional - field to be subscribed and displayed in the buttons. 'title' or _id if not supplied
+            btnTemplateName {string} optional- if btn is specified by display opt,template to display it. all the specified fields are passed as context
+            relTemplateName {string} optional - template for relationship display, has to handle selection and insertion functionality by itself
+            relatedDocSel{object} optional = additional custom selector for related collection colName
+            relSel{object} optional - additional custom selector for relations collection. use to filter users
+            deny {function(relDoc)} opt - predicate func to deny insert or remove on rels collection
+     */
+        this._rels[name]= _.extend(_.clone(rel),{name:name})
+    },
+    relsCollection: new Mongo.Collection('jsp-relations'),
+    getRelatedDocs:function(opts){
+        /*opts:myColName,otherColName,myDocId,otherColFields,relSel,otherSel*/
+        //first, get all ids of related docs from relations collection
+        var opts= _.clone(opts),
+            otherCol=Mongo.Collection.get(opts.otherColName),
+            relatedIds=this.relsCollection.find(getRelColSel(opts)).map(function(doc) {
+                if (doc.sides[0].colName === opts.myColName) {
+                    return doc.sides[1].docId
+                } else {
+                    return doc.sides[0].docId
+                }
+            });
+        // now, pull those ids out of the related collection
+        return {
+            in:otherCol.find({_id: {$in: relatedIds}}),
+            nin:otherCol.find({_id: {$nin: relatedIds}})
+        }
     }
 }
+
+if(Meteor.isServer) {
+    //this is publication for default behaviour
+    /* relSel{object} - for relations collection
+     sidesSel {array} - arrray of two selectors, one for each side of the relationship
+        colName{string}
+        sel{object}
+     */
+    Meteor.publish('jspRels', function (opts/*myColName,otherColName,myDocId,otherColFields*/) {
+        var otherCol=Mongo.Collection.get(opts.otherColName);
+        return [
+            jspAfRelations.relsCollection.find(getRelColSel(opts)),
+            opts.otherCol.find({},{fields: opts.otherColFields})
+        ]
+    });
+    Meteor.methods({
+        jspRelRemove:function(opts){
+            /*opts: {object}
+             fromColName:string
+             fromDocId: string
+             toDocId: string
+             toRelName: string
+             * */
+            var toRel=jspAfRelations.getRel(opts.toRelName),
+                reason=toRel.deny && toRel.deny(_.extend(opts,{type:'remove'})),
+                sides=[
+                    {docId:opts.fromDocId,colName:opts.fromColName},
+                    {docId:opts.toDocId,colName:toRel.colName}
+                ];
+            if(reason) Meteor.Error('jspRelError',reason);
+            jspAfRelations.relsCollection.remove(getInsSel(sides))
+        },
+        jspRelInsert:function(opts){
+            /*opts: {object}
+                fromColName:string
+                fromDocId: string
+                toDocId: string
+                toRelName: string
+                extra: object
+
+             * */
+            var toRel=jspAfRelations.getRel(opts.toRelName),
+                reason=toRel.deny && toRel.deny(_.extend(opts,{type:'insert'})),
+                sides=[
+                    {docId:opts.fromDocId,colName:opts.fromColName},
+                    {docId:opts.toDocId,colName:toRel.colName}
+                ];
+            if(reason) Meteor.Error('jspRelError',reason);
+            jspAfRelations.relsCollection.upsert(
+                getInsSel(sides),
+                _.extend(
+                    {sides:sides},
+                    opts.extra,{
+                        userId:Meteor.userId(),
+                        createdAt:Date.now()
+                    }
+                )
+            )
+        }
+    })
+}
+
+
+
